@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata: 
+  name: mysql-restore
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: restore
+        image: mysql:8.0
+        env:
+        - name: MYSQL_PWD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_ROOT_PASSWORD
+        command:
+        - /bin/bash
+        - -c
+        - |
+          LATEST=/backup/backup-20260902-183501.sql
+          echo "使用备份文件: $LATEST"
+          mysql  -h  mysql  -uroot  < $LATEST
+          echo "恢复完成"
+        volumeMounts:
+        - name: backup-data
+          mountPath: /backup
+      volumes:
+      - name: backup-data
+        persistentVolumeClaim:
+          claimName: backup-pvc 
+                

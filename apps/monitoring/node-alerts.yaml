@@ -1,0 +1,35 @@
+apiVersion: v1                                  # ConfigMap 属于核心 v1 组
+kind: ConfigMap                                 # 资源类型：配置字典（规则也用它存）
+metadata:
+  name: node-alert-rules                        # 名字（稍后 Prometheus 挂载时引用）
+  namespace: monitoring                         # 监控命名空间
+data:                                           # 数据区
+  node-alerts.yml: |                            # 键=文件名；| 多行文本保留换行
+    groups:                                     # 规则分组（可以有多个组）
+    - name: node-alerts                         # 这个组的名字（UI 里显示）
+      rules:                                    # 这个组里的规则列表
+      - alert: NodeDown                         # 规则1的名字：节点宕机
+        expr: up == 0                           # 触发条件：任何采集目标存活值=0（挂了）
+        for: 1m                                 # 持续 1 分钟才触发（防瞬时抖动误报）
+        labels:                                 # 给告警贴标签（用于路由分组）
+          severity: critical                    # 级别=严重
+        annotations:                            # 告警的"人类可读"信息
+          summary: "节点 {{ $labels.instance }} 已宕机"   # 告警内容；{{ $labels.instance }} 是模板变量（自动填节点 IP）
+
+      - alert: HighCPUUsage                     # 规则2：CPU 过高
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        # ↑ 拆解：rate(空闲CPU秒数[5分钟]) = 每秒空闲占比 → 100-空闲占比 = 使用率 → 超 80 触发
+        for: 2m                                 # 持续 2 分钟才触发
+        labels:
+          severity: warning                     # 级别=警告
+        annotations:
+          summary: "节点 {{ $labels.instance }} CPU 使用率超过 80%"
+
+      - alert: HighMemoryUsage                  # 规则3：内存过高
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 80
+        # ↑ 拆解：1 - 可用内存/总内存 = 使用比例 → ×100 = 使用率 → 超 80 触发
+        for: 2m                                 # 持续 2 分钟才触发
+        labels:
+          severity: warning                     # 级别=警告
+        annotations:
+          summary: "节点 {{ $labels.instance }} 内存使用率超过 80%"

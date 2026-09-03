@@ -1,0 +1,6 @@
+# 敏感信息（含真实密码/授权码，不提交）
+apps/mysql/secret.yaml
+apps/monitoring/alertmanager-config.yaml
+# vim 残留文件
+*.swp
+*.swo

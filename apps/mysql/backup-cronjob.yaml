@@ -1,0 +1,40 @@
+# CronJob = K8s 的定时任务（相当于集群里的 crontab）
+apiVersion: batch/v1                 # CronJob 属于 batch 组（批处理任务）
+kind: CronJob
+metadata:
+  name: mysql-backup                 # 任务名
+spec:
+  schedule: "*/5 * * * *"            # 定时表达式：每 5 分钟一次（学习演示；生产写 "0 2 * * *" 每天凌晨2点）
+  concurrencyPolicy: Forbid          # 并发策略：上一次没跑完就跳过本次（防止并发备份=简历里的"进程锁"！）
+  jobTemplate:                       # 每次触发时创建的 Job 模板
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure   # 失败才重启（成功不重启）
+          containers:
+          - name: backup
+            image: mysql:8.0         # 复用 MySQL 镜像（里面自带 mysqldump 工具）
+            env:
+            - name: TZ
+              value: Asia/Shanghai
+            - name: MYSQL_PWD        # mysqldump 会读这个环境变量当密码（密码不出现命令行，安全！）
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+            command:                 # 容器启动后执行的备份脚本
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              mkdir -p /backup
+              mysqldump -h mysql -uroot --all-databases > /backup/backup-$(date +%Y%m%d-%H%M%S).sql
+              ls -t /backup/*.sql | tail -n +8 | xargs -r rm -f
+              echo "备份完成，当前保留 $(ls /backup/*.sql | wc -l) 份"
+            volumeMounts:             # 备份文件存进 PVC（Pod 死了备份还在）
+            - name: backup-data
+              mountPath: /backup
+          volumes:
+          - name: backup-data
+            persistentVolumeClaim:
+              claimName: backup-pvc
