@@ -1,0 +1,37 @@
+---
+- name: 安装 K8s 组件 kubeadm/kubelet/kubectl
+  hosts: k8s
+  become: yes
+  tasks:
+    - name: 安装依赖工具
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - gpg
+
+    - name: 下载并安装阿里云 K8s 源公钥
+      shell: |
+        mkdir -p /etc/apt/keyrings
+        curl -fsSL https://mirrors.aliyun.com/kubernetes-new/core/stable/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: 写入阿里云 K8s 软件源
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+        content: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://mirrors.aliyun.com/kubernetes-new/core/stable/v1.28/deb/ /"
+
+    - name: 安装 K8s 三大件
+      apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: yes
+      loop: [kubelet, kubeadm, kubectl]
+
+    - name: 锁定版本防误升级
+      shell: apt-mark hold kubelet kubeadm kubectl
+      changed_when: false

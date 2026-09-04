@@ -1,0 +1,45 @@
+---
+- name: 安装配置容器运行时 containerd
+  hosts: k8s
+  become: yes
+  tasks:
+    - name: 安装 containerd
+      apt:
+        name: containerd
+        state: present
+        update_cache: yes
+
+    - name: 生成默认配置
+      command: containerd config default > /etc/containerd/config.toml
+      args:
+        creates: /etc/containerd/config.toml
+
+    - name: 修改 cgroup 驱动为 systemd
+      replace:
+        path: /etc/containerd/config.toml
+        regexp: 'SystemdCgroup = false'
+        replace: 'SystemdCgroup = true'
+
+    - name: 更换 pause 镜像为阿里云源
+      replace:
+        path: /etc/containerd/config.toml
+        regexp: 'registry\.k8s\.io/pause:[0-9.]+'
+        replace: 'registry.aliyuncs.com/google_containers/pause:3.9'
+
+    - name: 配置镜像加速
+      copy:
+        dest: /etc/containerd/certs.d/docker.io/hosts.toml
+        content: |
+          server = "https://registry-1.docker.io"
+
+          [host."https://docker.m.daocloud.io"]
+            capabilities = ["pull", "resolve"]
+
+          [host."https://docker.1ms.run"]
+            capabilities = ["pull", "resolve"]
+
+    - name: 重启 containerd 并开机自启
+      systemd:
+        name: containerd
+        state: restarted
+        enabled: yes
